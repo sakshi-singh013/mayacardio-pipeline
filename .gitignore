@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite Databases & WAL files
+*.db
+*.db-wal
+*.db-shm
+test_*.db*
+
+# OS / Editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Benchmarking logs
+resource_usage.json
