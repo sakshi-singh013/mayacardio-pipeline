@@ -104,7 +104,8 @@ class SyncEngine:
             s1_data = self.storage.get_window_sensor_data(session_id, 1, start_i, end_i)
             s2_data = self.storage.get_window_sensor_data(session_id, 2, start_i, end_i)
             
-            hr_start = max(0, 400 * (w - 4))
+            # Fetch S1 ch2 history for heart rate (needs 800 samples prior to window start)
+            hr_start = max(0, 400 * (w - 6))
             hr_end = 400 * (w + 1)
             s1_ch2 = self.storage.get_sensor1_ch2_slice(session_id, hr_start, hr_end)
 

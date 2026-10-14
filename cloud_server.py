@@ -133,13 +133,12 @@ class CloudServerHandler(BaseHTTPRequestHandler):
                         reason=l["reason"]
                     )
 
-                # Online Window Processing
-                # When in online stream mode, trigger window processing for completed windows
+                self._send_json(200, {"status": "success", "ingested": len(samples)})
+
+                # Online Window Processing asynchronously so HTTP response is sub-millisecond
                 sessions = set(s["session_id"] for s in samples)
                 for sess in sessions:
                     self._check_and_process_windows(sess)
-
-                self._send_json(200, {"status": "success", "ingested": len(samples)})
             except Exception as e:
                 self._send_json(500, {"error": str(e)})
             return
@@ -172,8 +171,8 @@ class CloudServerHandler(BaseHTTPRequestHandler):
             s1_data = self.storage.get_window_sensor_data(session_id, 1, start_i, end_i)
             s2_data = self.storage.get_window_sensor_data(session_id, 2, start_i, end_i)
             
-            # Fetch S1 ch2 history for heart rate
-            hr_start = max(0, 400 * (w - 4))
+            # Fetch S1 ch2 history for heart rate (needs 800 samples prior to window start)
+            hr_start = max(0, 400 * (w - 6))
             hr_end = 400 * (w + 1)
             s1_ch2 = self.storage.get_sensor1_ch2_slice(session_id, hr_start, hr_end)
 

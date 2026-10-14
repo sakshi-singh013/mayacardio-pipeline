@@ -43,6 +43,9 @@ class PipelineStorage:
             CREATE INDEX IF NOT EXISTS idx_samples_lookup 
             ON samples (session_id, sensor, sample_index);
 
+            CREATE INDEX IF NOT EXISTS idx_samples_synced_flag 
+            ON samples (synced, session_id, sensor, sample_index);
+
             CREATE TABLE IF NOT EXISTS loss_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id TEXT NOT NULL,
@@ -147,14 +150,34 @@ class PipelineStorage:
             return result
 
     def mark_synced(self, items: List[Dict[str, Any]]):
-        """Mark uploaded samples as synced."""
+        """Mark uploaded samples as synced using fast range updates."""
         if not items:
             return
-        keys = [(it["session_id"], it["sensor"], it["index"]) for it in items]
+        
+        # Group by (session_id, sensor) into continuous index ranges
+        from collections import defaultdict
+        grouped = defaultdict(list)
+        for it in items:
+            grouped[(it["session_id"], it["sensor"])].append(it["index"])
+
+        range_tuples = []
+        for (sess, sensor), indices in grouped.items():
+            indices.sort()
+            start = indices[0]
+            prev = start
+            for idx in indices[1:]:
+                if idx == prev + 1:
+                    prev = idx
+                else:
+                    range_tuples.append((sess, sensor, start, prev))
+                    start = idx
+                    prev = idx
+            range_tuples.append((sess, sensor, start, prev))
+
         with self._get_connection() as conn:
             conn.executemany(
-                "UPDATE samples SET synced = 1 WHERE session_id = ? AND sensor = ? AND sample_index = ?;",
-                keys
+                "UPDATE samples SET synced = 1 WHERE session_id = ? AND sensor = ? AND sample_index BETWEEN ? AND ?;",
+                range_tuples
             )
 
     def get_status_counts(self, session_id: Optional[str] = None) -> Dict[str, int]:

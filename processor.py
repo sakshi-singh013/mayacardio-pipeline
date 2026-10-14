@@ -23,11 +23,6 @@ def compute_peaks_for_session(ch2_dict: Dict[int, int], max_index: int) -> List[
 
     # Start searching from 800 since 800 preceding samples are required
     for i in range(800, max_index):
-        # 1. Sample after it must exist
-        if (i + 1) not in ch2_dict:
-            continue
-        
-        # Check current and neighbours
         curr_val = ch2_dict.get(i)
         left_val = ch2_dict.get(i - 1)
         right_val = ch2_dict.get(i + 1)
@@ -42,20 +37,12 @@ def compute_peaks_for_session(ch2_dict: Dict[int, int], max_index: int) -> List[
         if (i - prev_peak) < 100:
             continue
 
-        # Condition 1 & 3: Check all 800 prior samples exist and find their max
-        # Check presence and find max
-        prior_max = -float("inf")
-        has_all_800 = True
-        for p in range(i - 800, i):
-            v = ch2_dict.get(p)
-            if v is None:
-                has_all_800 = False
-                break
-            if v > prior_max:
-                prior_max = v
-
-        if not has_all_800:
+        # Condition 1 & 3: Check prior 800 samples exist and find max
+        prior_samples = [ch2_dict.get(p) for p in range(i - 800, i)]
+        if any(v is None for v in prior_samples):
             continue
+
+        prior_max = max(prior_samples)
 
         # Condition 3: larger than half of max of 800 samples before it
         if curr_val > (0.5 * prior_max):
