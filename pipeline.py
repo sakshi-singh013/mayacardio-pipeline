@@ -28,9 +28,18 @@ from client import MockClient
 from sync import SyncEngine
 
 
-def cmd_status(storage: PipelineStorage):
+def cmd_status(storage: PipelineStorage, cloud_url: str = CLOUD_URL):
     """Print current mode, samples saved, samples in the cloud, and backlog as one JSON line."""
-    mode = storage.get_meta("current_mode", "offline")
+    mode = "offline"
+    try:
+        req = urllib.request.Request(f"{cloud_url.rstrip('/')}/health", method="GET")
+        with urllib.request.urlopen(req, timeout=0.5) as resp:
+            if resp.status == 200:
+                mode = "online"
+    except Exception:
+        mode = "offline"
+
+    storage.set_meta("current_mode", mode)
     session_id = storage.get_meta("active_session_id")
     counts = storage.get_status_counts(session_id)
     
@@ -141,7 +150,7 @@ def main():
     storage = PipelineStorage(args.db)
 
     if args.command == "status":
-        cmd_status(storage)
+        cmd_status(storage, cloud_url=args.cloud_url)
     elif args.command == "export":
         cmd_export(storage, session_id=args.session, from_source=args.from_source, cloud_url=args.cloud_url)
     elif args.command == "results":
