@@ -25,8 +25,8 @@ CLOUD_HOST = os.getenv("CLOUD_HOST", "0.0.0.0")
 CLOUD_PORT = int(os.getenv("CLOUD_PORT", "8000"))
 
 # Network & Switching
-NETWORK_TIMEOUT_SECONDS = 3.0       # Timeout for cloud healthcheck/push
+NETWORK_TIMEOUT_SECONDS = 5.0       # Timeout for cloud healthcheck/push
 OFFLINE_SWITCH_THRESHOLD = 2        # Consecutive failures before switching offline (< 10s)
 ONLINE_CHECK_INTERVAL = 2.0         # Ping interval when offline (< 10s)
-CATCHUP_BATCH_SIZE = 2000           # Samples per upload batch during catch-up
+CATCHUP_BATCH_SIZE = 1000           # Samples per upload batch during catch-up
 MAX_DATA_LOSS_POWER_CUT_SEC = 0.5   # Maximum data loss on sudden power cut

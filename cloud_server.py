@@ -7,6 +7,7 @@ and executes Section 3 processing logic producing online results within 5 second
 import json
 import time
 import argparse
+import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from urllib.parse import urlparse, parse_qs
@@ -134,70 +135,78 @@ class CloudServerHandler(BaseHTTPRequestHandler):
                     )
 
                 self._send_json(200, {"status": "success", "ingested": len(samples)})
-
-                # Online Window Processing asynchronously so HTTP response is sub-millisecond
-                sessions = set(s["session_id"] for s in samples)
-                for sess in sessions:
-                    self._check_and_process_windows(sess)
             except Exception as e:
                 self._send_json(500, {"error": str(e)})
             return
 
         self._send_json(404, {"error": "Not Found"})
 
-    def _check_and_process_windows(self, session_id: str):
-        """Execute processing for completed windows in online mode."""
-        last_w = self.last_processed_window.get(session_id, -1)
-        
-        # Check available sample indices
-        status = self.storage.get_status_counts(session_id)
-        if status["samples_saved"] < 400:
+
+def process_session_windows(storage: PipelineStorage, session_id: str, mode: str = "online"):
+    """Compute and save Section 3 window processing results for all newly completed windows."""
+    with storage._get_connection() as conn:
+        row_done = conn.execute(
+            "SELECT MAX(window) as max_done FROM results WHERE session_id = ? AND mode = ?;",
+            (session_id, mode)
+        ).fetchone()
+        last_w = row_done["max_done"] if (row_done and row_done["max_done"] is not None) else -1
+
+        row_samp = conn.execute(
+            "SELECT MAX(sample_index) as max_idx FROM samples WHERE session_id = ?;",
+            (session_id,)
+        ).fetchone()
+        if not row_samp or row_samp["max_idx"] is None:
             return
+        max_w = row_samp["max_idx"] // 400
 
-        # Determine highest window possible
-        with self.storage._get_connection() as conn:
-            row = conn.execute(
-                "SELECT MAX(sample_index) as max_idx FROM samples WHERE session_id = ?;",
-                (session_id,)
-            ).fetchone()
-            if not row or row["max_idx"] is None:
-                return
-            max_w = row["max_idx"] // 400
+    for w in range(last_w + 1, max_w):
+        start_i = 400 * w
+        end_i = 400 * w + 399
+        s1_data = storage.get_window_sensor_data(session_id, 1, start_i, end_i)
+        s2_data = storage.get_window_sensor_data(session_id, 2, start_i, end_i)
+        hr_start = max(0, 400 * (w - 6))
+        hr_end = 400 * (w + 1)
+        s1_ch2 = storage.get_sensor1_ch2_slice(session_id, hr_start, hr_end)
 
-        # Process each completed window
-        for w in range(last_w + 1, max_w):
-            start_i = 400 * w
-            end_i = 400 * w + 399
-            s1_data = self.storage.get_window_sensor_data(session_id, 1, start_i, end_i)
-            s2_data = self.storage.get_window_sensor_data(session_id, 2, start_i, end_i)
-            
-            # Fetch S1 ch2 history for heart rate (needs 800 samples prior to window start)
-            hr_start = max(0, 400 * (w - 6))
-            hr_end = 400 * (w + 1)
-            s1_ch2 = self.storage.get_sensor1_ch2_slice(session_id, hr_start, hr_end)
+        res = process_window(session_id, w, mode, s1_data, s2_data, s1_ch2)
+        storage.save_window_result(res)
 
-            result = process_window(
-                session_id=session_id,
-                window=w,
-                mode="online",
-                s1_samples=s1_data,
-                s2_samples=s2_data,
-                s1_ch2_history=s1_ch2
-            )
-            self.storage.save_window_result(result)
-            self.last_processed_window[session_id] = w
+
+# Expose on CloudServerHandler for backwards compatibility
+CloudServerHandler._check_and_process_windows = lambda self, session_id: process_session_windows(CloudServerHandler.storage, session_id, "online")
+
+
+def _cloud_background_processor(storage: PipelineStorage, stop_event: threading.Event):
+    """Background worker continuously computing Section 3 windows on the cloud."""
+    while not stop_event.is_set():
+        try:
+            with storage._get_connection() as conn:
+                rows = conn.execute("SELECT DISTINCT session_id FROM samples;").fetchall()
+                sessions = [r["session_id"] for r in rows]
+
+            for sess in sessions:
+                process_session_windows(storage, sess, mode="online")
+        except Exception:
+            pass
+        time.sleep(0.5)
 
 
 def run_cloud_server(host: str = CLOUD_HOST, port: int = CLOUD_PORT, db_path: str = CLOUD_DB_PATH):
     storage = PipelineStorage(db_path)
     CloudServerHandler.storage = storage
     server = ThreadedHTTPServer((host, port), CloudServerHandler)
+    
+    stop_event = threading.Event()
+    proc_thread = threading.Thread(target=_cloud_background_processor, args=(storage, stop_event), daemon=True)
+    proc_thread.start()
+
     print(f"[CloudServer] Running on http://{host}:{port} (db: {db_path})")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("[CloudServer] Shutting down...")
     finally:
+        stop_event.set()
         server.server_close()
 
 
