@@ -1,0 +1,13 @@
+MayaCardio Case Assessment: Never Lose a Heartbeat
+Role: Software Systems Engineer
+Candidate: Sakshi Singh
+
+5-Minute Demo Video Link (Google Drive):
+https://drive.google.com/file/d/1EnccWv4oNk9gU-wcgSAhpJi37DJ1EXxS/view?usp=sharing
+
+Demonstration Highlights:
+1. Online real-time streaming of dual cardiac sensors at 400 Hz
+2. Network failure cut simulation (stopping cloud service) and automatic < 10s switch to offline mode
+3. Real-time disk persistence during offline mode
+4. Network recovery and automatic backlog catch-up to 0 samples
+5. Process kill (SIGKILL) survival and atomic recovery via SQLite WAL

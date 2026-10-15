@@ -131,6 +131,14 @@ Results will be output to `resource_usage.json`.
 
 ---
 
-## 8. Author
+## 8. AI Tools Disclosure
+
+In accordance with the MayaCardio assessment guidelines (*"AI tools are welcome with disclosure. Be ready to explain your choices, verify your results and adapt your work"*):
+* **AI Tool Utilized:** Antigravity / Gemini 3.8 as an assistive pair-programming copilot for code scaffolding, drafting synthetic edge-case tests, and documentation formatting.
+* **Engineering Ownership & Verification:** System architecture design, database durability trade-offs (SQLite WAL with `PRAGMA synchronous = FULL`), network state-machine transition timings, and mathematical verification of the 5-second Heart Rate sliding window were verified through automated end-to-end testing and manual failure injections.
+
+---
+
+## 9. Author
 * **Sakshi Singh** — B.Tech Computer Science and Engineering, Vellore Institute of Technology.
 * **Email:** sakshisingh67117@gmail.com
